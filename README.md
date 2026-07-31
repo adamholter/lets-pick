@@ -17,7 +17,7 @@ Create a room with any URL path, share it or its QR code, add ideas, and vote.
 
 ## Local development
 
-Requires Node.js 22.13 or newer.
+Requires Node.js 22.19 or newer.
 
 ```bash
 npm install
