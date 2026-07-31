@@ -5,17 +5,17 @@ import { Bird, Bot, Bug, Cat, Check, Dog, Fish, Ghost, Heart, Plus, QrCode as Qr
 import QRCode from "qrcode";
 
 type PickItem = {
-  id: number;
+  id: string;
   text: string;
   liked: boolean;
   votes: number;
 };
 
 const starterItems: PickItem[] = [
-  { id: 1, text: "The Matrix", liked: true, votes: 8 },
-  { id: 2, text: "Spirited Away", liked: true, votes: 6 },
-  { id: 3, text: "Knives Out", liked: false, votes: 5 },
-  { id: 4, text: "The Grand Budapest Hotel", liked: false, votes: 3 },
+  { id: "starter-matrix", text: "The Matrix", liked: false, votes: 8 },
+  { id: "starter-spirited-away", text: "Spirited Away", liked: false, votes: 6 },
+  { id: "starter-knives-out", text: "Knives Out", liked: false, votes: 5 },
+  { id: "starter-grand-budapest", text: "The Grand Budapest Hotel", liked: false, votes: 3 },
 ];
 
 type PresenceUser = {
@@ -80,11 +80,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const room = window.location.pathname.replace(/^\/+|\/+$/g, "") || "friends";
-    window.localStorage.setItem(`lets-pick:${room}:concept-one`, JSON.stringify(items));
-  }, [items]);
-
-  useEffect(() => {
     QRCode.toDataURL(roomUrl, {
       width: 720,
       margin: 2,
@@ -130,6 +125,48 @@ export default function Home() {
   }, [clientId, roomId]);
 
   useEffect(() => {
+    if (!clientId) return;
+    let active = true;
+    let running = false;
+    const loadItems = async () => {
+      if (running) return;
+      running = true;
+      const storageKey = `lets-pick:${roomId}:concept-one`;
+      const stored = window.localStorage.getItem(storageKey);
+      let legacyItems: PickItem[] | null = null;
+      if (stored) {
+        try { legacyItems = JSON.parse(stored) as PickItem[]; } catch { /* leave malformed local data untouched */ }
+      }
+      try {
+        const response = await fetch("/api/items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: legacyItems ? "import" : "list",
+            roomId,
+            clientId,
+            items: legacyItems,
+          }),
+        });
+        if (!response.ok) throw new Error();
+        const data = await response.json() as { items: PickItem[] };
+        if (active) setItems(data.items);
+        if (legacyItems) window.localStorage.removeItem(storageKey);
+      } catch {
+        // Preserve the last visible data and retry; never overwrite local recovery data.
+      } finally {
+        running = false;
+      }
+    };
+    void loadItems();
+    const timer = window.setInterval(loadItems, 4_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [clientId, roomId]);
+
+  useEffect(() => {
     if (!qrOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setQrOpen(false);
@@ -143,25 +180,50 @@ export default function Home() {
   }, [composerOpen]);
 
   const sortedItems = useMemo(
-    () => [...items].sort((a, b) => b.votes - a.votes || a.id - b.id),
+    () => [...items].sort((a, b) => b.votes - a.votes || a.id.localeCompare(b.id)),
     [items],
   );
 
-  function toggleVote(id: number) {
+  async function toggleVote(id: string) {
     setItems((current) => current.map((item) =>
       item.id === id
         ? { ...item, liked: !item.liked, votes: Math.max(0, item.votes + (item.liked ? -1 : 1)) }
         : item
     ));
+    try {
+      const response = await fetch("/api/vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId, clientId, itemId: id }),
+      });
+      if (!response.ok) throw new Error();
+      const result = await response.json() as { itemId: string; liked: boolean; votes: number };
+      setItems((current) => current.map((item) => item.id === result.itemId ? { ...item, liked: result.liked, votes: result.votes } : item));
+    } catch {
+      setShareStatus("Vote didn’t save");
+      window.setTimeout(() => setShareStatus(""), 2200);
+    }
   }
 
-  function addIdea(event: FormEvent) {
+  async function addIdea(event: FormEvent) {
     event.preventDefault();
     const text = value.trim();
     if (!text) return;
-    setItems((current) => [...current, { id: Date.now(), text, liked: false, votes: 0 }]);
-    setValue("");
-    setComposerOpen(false);
+    try {
+      const response = await fetch("/api/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", roomId, clientId, text }),
+      });
+      if (!response.ok) throw new Error();
+      const data = await response.json() as { items: PickItem[] };
+      setItems(data.items);
+      setValue("");
+      setComposerOpen(false);
+    } catch {
+      setShareStatus("Idea didn’t save");
+      window.setTimeout(() => setShareStatus(""), 2200);
+    }
   }
 
   async function shareRoom() {

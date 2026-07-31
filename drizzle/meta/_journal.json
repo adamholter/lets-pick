@@ -15,6 +15,13 @@
       "when": 1785512755353,
       "tag": "0001_misty_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785514366034,
+      "tag": "0002_ambitious_lizard",
+      "breakpoints": true
     }
   ]
 }

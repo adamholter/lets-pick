@@ -23,6 +23,22 @@ export async function ensurePresenceTable() {
       item_type TEXT NOT NULL DEFAULT 'thing',
       updated_at INTEGER NOT NULL
     )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS room_items (
+      id TEXT PRIMARY KEY NOT NULL,
+      room_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      votes INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )`),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS room_items_room_idx ON room_items (room_id, created_at)"),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS room_votes (
+      room_id TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (item_id, client_id)
+    )`),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS room_votes_room_item_idx ON room_votes (room_id, item_id)"),
   ]);
 }
 

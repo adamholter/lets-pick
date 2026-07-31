@@ -6,6 +6,24 @@ export const rooms = sqliteTable("rooms", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const roomItems = sqliteTable("room_items", {
+  id: text("id").primaryKey(),
+  roomId: text("room_id").notNull(),
+  text: text("text").notNull(),
+  votes: integer("votes").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [index("room_items_room_idx").on(table.roomId, table.createdAt)]);
+
+export const roomVotes = sqliteTable("room_votes", {
+  roomId: text("room_id").notNull(),
+  itemId: text("item_id").notNull(),
+  clientId: text("client_id").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.itemId, table.clientId] }),
+  index("room_votes_room_item_idx").on(table.roomId, table.itemId),
+]);
+
 export const roomPresence = sqliteTable("room_presence", {
   roomId: text("room_id").notNull(),
   clientId: text("client_id").notNull(),
